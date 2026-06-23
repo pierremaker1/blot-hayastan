@@ -1,0 +1,15 @@
+{
+  "name": "Blot · belote arménienne",
+  "short_name": "Blot",
+  "description": "Apprendre et jouer au blot (belote arménienne) — 100% hors-ligne.",
+  "lang": "fr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b3d2e",
+  "theme_color": "#0b3d2e",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

@@ -1,0 +1,9 @@
+# Config locale de l'éditeur / preview (spécifique à la machine)
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (au cas où)
+node_modules/

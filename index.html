@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0b3d2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Blot">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Blot · belote arménienne</title>
+<style>
+/* =========================================================================
+   FEUILLE DE STYLE
+   Tout est pensé pour un téléphone tenu à la verticale (portrait).
+   On utilise des variables CSS (:root) pour centraliser les couleurs :
+   changer une couleur ici la change partout dans l'app.
+   ========================================================================= */
+:root{
+  --felt:#0b3d2e; --felt2:#0f4f3a; --line:rgba(255,255,255,.12);
+  --gold:#e9c46a; --gold2:#f4d27a; --red:#d7263d; --dark:#1b2430;
+  --card:#fbfbf7; --ink:#1b2430; --muted:#9fb4ab; --good:#3ddc84; --bad:#ff6b6b;
+  --nav:#072a20; --panel:#0e4636; --chip:#0a3a2c;
+  /* "safe areas" = les zones de l'écran masquées par l'encoche / la barre du bas
+     sur les téléphones modernes. On les laisse libres pour ne rien cacher. */
+  --safe-top:env(safe-area-inset-top); --safe-bot:env(safe-area-inset-bottom);
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  background:radial-gradient(120% 80% at 50% 0%,var(--felt2),var(--felt) 70%);
+  color:#eaf3ef; overflow:hidden; user-select:none;
+  display:flex; flex-direction:column; height:100dvh;   /* 100dvh = hauteur réelle visible, mobile-safe */
+}
+button{font-family:inherit; cursor:pointer}
+.hidden{display:none !important}
+
+/* ---------- barre du haut + onglets ---------- */
+header{
+  flex:0 0 auto; background:var(--nav); padding:calc(8px + var(--safe-top)) 10px 8px;
+  display:flex; align-items:center; gap:8px; box-shadow:0 2px 8px rgba(0,0,0,.3); z-index:20;
+}
+.brand{font-weight:800; letter-spacing:.5px; font-size:18px}
+.brand .a{color:var(--gold)}
+.brand .b{color:#ef6c6c}
+.tabs{margin-left:auto; display:flex; gap:4px; background:#04201a; padding:3px; border-radius:999px}
+.tab{border:0; background:transparent; color:var(--muted); padding:6px 12px; border-radius:999px; font-size:13px; font-weight:600}
+.tab.active{background:var(--gold); color:#23180a}
+
+/* ---------- les 3 "vues" (Jouer / Règles / Antisèche) ---------- */
+main{flex:1 1 auto; position:relative; min-height:0}
+.view{position:absolute; inset:0; overflow:auto; -webkit-overflow-scrolling:touch}
+.view.play{overflow:hidden; display:flex; flex-direction:column}
+
+/* ---------- la table de jeu ---------- */
+.scorebar{flex:0 0 auto; display:flex; gap:8px; padding:8px 10px 4px}
+.team{flex:1; background:var(--chip); border:1px solid var(--line); border-radius:12px; padding:6px 10px; display:flex; flex-direction:column}
+.team .lbl{font-size:11px; color:var(--muted); display:flex; justify-content:space-between}
+.team .sc{font-size:22px; font-weight:800; line-height:1}
+.team.nous{box-shadow:inset 0 0 0 1px rgba(61,220,132,.25)}
+.team.eux{box-shadow:inset 0 0 0 1px rgba(255,107,107,.2)}
+
+.table{flex:1 1 auto; position:relative; min-height:0; margin:2px 6px}
+.seat{position:absolute; display:flex; flex-direction:column; align-items:center; gap:3px}
+.seat .name{font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; background:rgba(0,0,0,.25)}
+.seat .name.turn{background:var(--gold); color:#23180a; box-shadow:0 0 0 3px rgba(233,196,106,.25)} /* à qui de jouer */
+.seat .name.partner::after{content:" ·partenaire"; color:var(--good); font-weight:600}
+.seat.north{top:0; left:50%; transform:translateX(-50%)}
+.seat.west{left:2px; top:46%; transform:translateY(-50%)}
+.seat.east{right:2px; top:46%; transform:translateY(-50%)}
+.backrow{display:flex}
+.seat.west .backrow,.seat.east .backrow{flex-direction:column}
+.cardback{width:26px;height:37px;border-radius:5px;
+  background:repeating-linear-gradient(45deg,#5b1d24,#5b1d24 4px,#7a2630 4px,#7a2630 8px);
+  border:1px solid rgba(255,255,255,.25); margin:-1px -10px -1px 0; box-shadow:0 1px 2px rgba(0,0,0,.4)}
+.seat.west .cardback,.seat.east .cardback{margin:-12px 0 0 0}
+
+/* zone centrale : le pli en cours + la pastille d'atout */
+.center{position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:160px; height:170px}
+.trump-badge{position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:58px;height:58px;border-radius:50%; background:rgba(0,0,0,.32); border:1px solid var(--line);
+  display:flex;flex-direction:column;align-items:center;justify-content:center; font-size:9px; color:var(--muted); text-align:center; line-height:1.1}
+.trump-badge .sym{font-size:22px; line-height:1; margin:1px 0}
+.slot{position:absolute; width:52px;height:74px; transition:all .18s ease}     /* emplacement d'une carte jouée */
+.slot.s-south{bottom:0;left:50%;transform:translateX(-50%)}
+.slot.s-north{top:0;left:50%;transform:translateX(-50%)}
+.slot.s-west{left:0;top:50%;transform:translateY(-50%)}
+.slot.s-east{right:0;top:50%;transform:translateY(-50%)}
+
+/* la main du joueur, en bas, en éventail */
+.handwrap{flex:0 0 auto; padding:4px 6px calc(6px + var(--safe-bot))}
+.hand{display:flex; justify-content:center; min-height:96px; padding-top:4px}
+.hand .card{margin-left:-20px; transition:transform .12s ease, opacity .12s}     /* -20px => les cartes se chevauchent */
+.hand .card:first-child{margin-left:0}
+.hand .card.playable{cursor:pointer}
+.hand .card.playable:active{transform:translateY(-10px)}                          /* la carte "saute" quand on la touche */
+.hand .card.illegal{opacity:.4; filter:grayscale(.5)}                            /* coup interdit : carte grisée */
+.hand .card.hint{box-shadow:0 0 0 3px var(--gold), 0 6px 14px rgba(0,0,0,.5); transform:translateY(-10px)} /* indice 💡 */
+
+/* une carte (générique) */
+.card{width:58px;height:82px;border-radius:8px;background:var(--card);color:var(--ink);
+  position:relative; box-shadow:0 2px 5px rgba(0,0,0,.35); border:1px solid rgba(0,0,0,.15); flex:0 0 auto}
+.card .r{position:absolute; font-weight:800; line-height:1; font-size:15px}
+.card .r.tl{top:4px;left:5px} .card .r.br{bottom:4px;right:5px; transform:rotate(180deg)}
+.card .pip{position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:30px}
+.card.red{color:var(--red)}                                                       /* cœur ♥ et carreau ♦ en rouge */
+.slot .card{width:52px;height:74px}
+.slot .card .r{font-size:13px} .slot .card .pip{font-size:26px}
+
+/* ligne de statut + boutons d'action */
+.statusline{flex:0 0 auto; text-align:center; min-height:22px; font-size:13px; color:var(--gold2); font-weight:600; padding:2px 8px}
+.actionbar{flex:0 0 auto; display:flex; gap:8px; justify-content:center; padding:2px 10px 4px}
+.btn{border:0;border-radius:10px;padding:9px 14px;font-weight:700;font-size:14px}
+.btn.primary{background:var(--gold);color:#23180a}
+.btn.ghost{background:rgba(255,255,255,.1);color:#eaf3ef;border:1px solid var(--line)}
+.btn:disabled{opacity:.4}
+
+/* ---------- fenêtres modales (enchères, fin de donne, bienvenue) ---------- */
+.overlay{position:absolute; inset:0; background:rgba(3,18,14,.72); backdrop-filter:blur(3px);
+  display:flex; align-items:center; justify-content:center; padding:16px; z-index:30}
+.modal{background:linear-gradient(180deg,#11553f,#0c3f2f); border:1px solid var(--line);
+  border-radius:18px; padding:16px; width:100%; max-width:360px; max-height:90%; overflow:auto; box-shadow:0 18px 50px rgba(0,0,0,.5)}
+.modal h2{margin:0 0 6px; font-size:18px}
+.modal h2 .em{color:var(--gold)}
+.modal p{font-size:13px; line-height:1.45}
+.bid-cards{display:flex; justify-content:center; flex-wrap:wrap; gap:2px; margin:8px 0}
+.bid-cards .card{width:42px;height:60px}
+.bid-cards .card .r{font-size:11px} .bid-cards .card .pip{font-size:20px}
+.suit-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 0}
+.suit-btn{border:1px solid var(--line); background:rgba(255,255,255,.06); color:#fff; border-radius:12px;
+  padding:12px; font-size:22px; font-weight:800; display:flex; align-items:center; justify-content:center; gap:8px}
+.suit-btn small{font-size:11px;color:var(--muted);font-weight:600}
+.suit-btn.red{color:#ff8a8a}
+.suit-btn.best{box-shadow:0 0 0 2px var(--gold)}                                   /* la meilleure couleur, suggérée */
+.rowbtns{display:flex; gap:8px; margin-top:8px}
+.rowbtns .btn{flex:1}
+.welcome ol{padding-left:18px; margin:8px 0} .welcome li{font-size:13px; margin:5px 0}
+.scoretable{width:100%; border-collapse:collapse; margin:8px 0; font-size:13px}
+.scoretable td,.scoretable th{padding:5px 6px; border-bottom:1px solid var(--line); text-align:right}
+.scoretable th:first-child,.scoretable td:first-child{text-align:left; color:var(--muted)}
+.scoretable .tot td{font-weight:800; border-top:2px solid var(--line); border-bottom:0}
+.pill{display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700}
+.pill.good{background:rgba(61,220,132,.18); color:var(--good)}
+.pill.bad{background:rgba(255,107,107,.18); color:var(--bad)}
+
+/* ---------- pages Règles & Antisèche ---------- */
+.doc{padding:14px 16px calc(28px + var(--safe-bot)); max-width:620px; margin:0 auto; line-height:1.5}
+.doc h1{font-size:22px; margin:.2em 0 .4em}
+.doc h2{font-size:17px; color:var(--gold); margin:1.1em 0 .3em; border-bottom:1px solid var(--line); padding-bottom:4px}
+.doc h3{font-size:14px; margin:.9em 0 .2em; color:var(--gold2)}
+.doc p,.doc li{font-size:14px; color:#dceae4}
+.doc strong{color:#fff}
+.doc ul{padding-left:20px; margin:.3em 0}
+.doc .tbl{width:100%; border-collapse:collapse; margin:8px 0; font-size:13px; background:rgba(0,0,0,.18); border-radius:10px; overflow:hidden}
+.doc .tbl th,.doc .tbl td{padding:7px 8px; border-bottom:1px solid var(--line); text-align:center}
+.doc .tbl th{background:rgba(0,0,0,.25); color:var(--gold2); font-size:12px}
+.doc .tbl td:first-child{text-align:left; font-weight:700}
+.doc .tbl tr:last-child td{border-bottom:0}
+.note{background:rgba(233,196,106,.1); border-left:3px solid var(--gold); padding:8px 12px; border-radius:0 8px 8px 0; margin:10px 0; font-size:13px}
+.tip{background:rgba(61,220,132,.08); border-left:3px solid var(--good); padding:8px 12px; border-radius:0 8px 8px 0; margin:10px 0; font-size:13px}
+.arm{background:rgba(120,160,255,.1); border-left:3px solid #8fb3ff; padding:8px 12px; border-radius:0 8px 8px 0; margin:10px 0; font-size:13px}
+.kbd{display:inline-block; background:#fff; color:#1b2430; border-radius:5px; padding:0 5px; font-weight:800; font-size:12px; margin:0 1px}
+.kbd.red{color:var(--red)}
+/* lexique arménien : mot · prononciation · sens */
+.lex{width:100%; border-collapse:collapse; margin:8px 0; font-size:13px}
+.lex td{padding:6px 6px; border-bottom:1px solid var(--line); vertical-align:top}
+.lex .arm-w{font-weight:800; color:#cdddff; white-space:nowrap}
+.lex .pron{color:var(--gold2); font-style:italic; white-space:nowrap}
+.glos dt{font-weight:800; color:var(--gold2); margin-top:8px}
+.glos dd{margin:0 0 4px; font-size:13px; color:#dceae4}
+.toast{position:absolute; top:8px; left:50%; transform:translateX(-50%); background:var(--gold); color:#23180a;
+  padding:6px 14px; border-radius:999px; font-weight:800; font-size:13px; z-index:40; box-shadow:0 6px 16px rgba(0,0,0,.4); animation:pop .3s ease}
+@keyframes pop{from{transform:translate(-50%,-8px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="a">Բ</span>lot <span class="b">Hayastan</span></div>
+  <nav class="tabs">
+    <button class="tab active" data-tab="play">Jouer</button>
+    <button class="tab" data-tab="rules">Règles</button>
+    <button class="tab" data-tab="cheat">Antisèche</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ===================== VUE : JOUER ===================== -->
+  <section class="view play" id="view-play">
+    <!-- scores cumulés des deux équipes -->
+    <div class="scorebar">
+      <div class="team nous"><span class="lbl"><span>NOUS (toi + Nord)</span><span id="trickN">0 plis</span></span><span class="sc" id="scoreN">0</span></div>
+      <div class="team eux"><span class="lbl"><span>EUX (Est + Ouest)</span><span id="trickE">0 plis</span></span><span class="sc" id="scoreE">0</span></div>
+    </div>
+
+    <!-- la table : Nord en haut, Ouest à gauche, Est à droite, toi en bas -->
+    <div class="table" id="table">
+      <div class="seat north" id="seat-2"><div class="name partner" id="name-2">Nord</div><div class="backrow" id="back-2"></div></div>
+      <div class="seat west"  id="seat-1"><div class="name" id="name-1">Ouest</div><div class="backrow" id="back-1"></div></div>
+      <div class="seat east"  id="seat-3"><div class="name" id="name-3">Est</div><div class="backrow" id="back-3"></div></div>
+      <div class="center" id="center">
+        <div class="trump-badge" id="trumpBadge"><div>atout<br><b>kozir</b></div><div class="sym">–</div></div>
+      </div>
+    </div>
+
+    <div class="statusline" id="status">Touche « Nouvelle partie » pour commencer.</div>
+    <div class="actionbar">
+      <button class="btn ghost" id="btnHint">💡 Indice</button>
+      <button class="btn primary" id="btnNew">Nouvelle partie</button>
+    </div>
+    <!-- ta main (tes 8 cartes) -->
+    <div class="handwrap"><div class="hand" id="hand"></div></div>
+  </section>
+
+  <!-- ===================== VUE : RÈGLES ===================== -->
+  <section class="view hidden" id="view-rules"><div class="doc" id="rulesDoc"></div></section>
+
+  <!-- ===================== VUE : ANTISÈCHE ===================== -->
+  <section class="view hidden" id="view-cheat"><div class="doc" id="cheatDoc"></div></section>
+</main>
+
+<script>
+/* ===========================================================================
+ *  BLOT — belote arménienne · moteur de jeu + IA + interface
+ *  100 % hors-ligne · pensé pour un DÉBUTANT total.
+ *  ---------------------------------------------------------------------------
+ *  PLAN DU FICHIER (cherche ces titres pour t'y retrouver) :
+ *    1. CONSTANTES        : les cartes, leur ordre, leur valeur en points
+ *    2. ÉTAT DU JEU (G)    : tout ce qui décrit la partie en cours
+ *    3. RÈGLES PURES       : qui gagne un pli ? quels coups sont permis ?
+ *    4. L'IA               : comment les 3 robots décident (enchère + coup)
+ *    5. AFFICHAGE          : dessiner la table à partir de l'état G
+ *    6. DÉROULÉ DE LA PARTIE : donne -> enchères -> 8 plis -> décompte
+ *    7. CONTENU RÈGLES/ANTISÈCHE + démarrage
+ *
+ *  CONVENTION DES JOUEURS (très important) :
+ *    siège 0 = TOI (Sud)      siège 2 = NORD = ton partenaire (en face)
+ *    siège 1 = OUEST          siège 3 = EST           (les deux adversaires)
+ *    Équipe "NOUS" = sièges 0 et 2.   Équipe "EUX" = sièges 1 et 3.
+ *    On joue dans l'ordre 0 -> 1 -> 2 -> 3 (sens horaire).
+ * =========================================================================== */
+
+/* ===================== 1. CONSTANTES ===================== */
+
+// Les 4 couleurs (S=pique, H=cœur, D=carreau, C=trèfle). Codes courts en interne.
+const SUITS = ['S','H','D','C'];
+const SUIT_SYM  = {S:'♠', H:'♥', D:'♦', C:'♣'};                 // symbole affiché
+const SUIT_NAME = {S:'Pique', H:'Cœur', D:'Carreau', C:'Trèfle'}; // nom français
+const SUIT_RED  = {S:false, H:true, D:true, C:false};            // cœur/carreau = rouge
+// Les 8 rangs présents dans un jeu de 32 cartes (du 7 à l'As).
+const RANKS = ['7','8','9','10','J','Q','K','A'];                 // J=Valet Q=Dame K=Roi A=As
+const RANK_LABEL = {J:'V', Q:'D', K:'R', A:'A', '10':'10','9':'9','8':'8','7':'7'}; // étiquette FR
+
+/* LE CŒUR DU BLOT : une carte n'a PAS la même force ni la même valeur selon
+ * qu'elle est ATOUT ou non. À l'atout, le Valet puis le 9 deviennent les rois.
+ * Ces deux tableaux d'ordre vont du PLUS FORT (index 0) au plus faible. */
+const ORDER_PLAIN = ['A','10','K','Q','J','9','8','7'];           // hors atout
+const ORDER_TRUMP = ['J','9','A','10','K','Q','8','7'];           // à l'atout
+// Valeur en points (le total des 32 cartes fait toujours 152).
+const PTS_PLAIN = {A:11,'10':10,K:4,Q:3,J:2,'9':0,'8':0,'7':0};   // hors atout
+const PTS_TRUMP = {J:20,'9':14,A:11,'10':10,K:4,Q:3,'8':0,'7':0}; // à l'atout
+
+const SEAT_NAME = {0:'Toi (Sud)',1:'Ouest',2:'Nord',3:'Est'};
+// Petites fonctions utilitaires sur les sièges :
+const teamOf    = p => (p%2===0) ? 0 : 1;   // siège -> équipe (0=NOUS, 1=EUX)
+const partnerOf = p => (p+2)%4;             // siège -> siège du partenaire
+
+/* "force" d'une carte = un nombre pour comparer deux cartes dans un pli.
+ * On ajoute +100 aux atouts pour qu'ils battent TOUJOURS une carte non-atout. */
+const rankStrength = (card, trump) =>
+  (card.suit===trump ? (8 - ORDER_TRUMP.indexOf(card.rank)) + 100
+                     : (8 - ORDER_PLAIN.indexOf(card.rank)));
+// points d'une carte, en tenant compte de l'atout du moment
+const cardPoints = (card, trump) =>
+  card.suit===trump ? PTS_TRUMP[card.rank] : PTS_PLAIN[card.rank];
+
+
+/* ===================== 2. ÉTAT DU JEU (G) ===================== */
+/* Tout l'état de la partie tient dans un seul objet G. L'affichage est
+ * recalculé à partir de G : on change G, puis on appelle render(). */
+let G = null;
+function freshGame(){
+  return {
+    hands:[[],[],[],[]],            // les cartes en main de chaque siège
+    dealer:3,                       // qui distribue (=> 1er à parler = siège 0 = toi)
+    trump:null, taker:null,         // couleur d'atout choisie + siège du preneur
+    cumul:[0,0],                    // score CUMULÉ de la partie [NOUS, EUX]
+    target:1001,                    // on joue jusqu'à 1001 points
+    phase:'idle',                   // idle | bidding | playing | roundEnd
+    tricksWon:[0,0],                // nb de plis gagnés cette donne [NOUS, EUX]
+    pile:[[],[]],                   // cartes ramassées par chaque équipe (pour compter)
+    lastTrickTeam:null,             // qui a pris le DERNIER pli (=> +10 "dix de der")
+    // suivi belote-rebelote : a-t-on vu passer le Roi et la Dame d'atout d'une équipe ?
+    beloteShown:{0:{K:false,Q:false},1:{K:false,Q:false}}, beloteTeam:null,
+    trick:[],                       // le pli en cours : [{player, card}, ...]
+    current:0,                      // à qui de jouer
+    hintCard:null,                  // carte mise en surbrillance par le bouton Indice
+  };
+}
+
+/* fabrique les 32 cartes puis les mélange (algorithme de Fisher–Yates) */
+function buildDeck(){
+  const d=[];
+  for(const s of SUITS) for(const r of RANKS) d.push({suit:s,rank:r});
+  return d;
+}
+function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];} return a; }
+
+
+/* ===================== 3. RÈGLES PURES ===================== */
+
+/* QUI MÈNE LE PLI ? On regarde les cartes déjà posées et on renvoie le siège
+ * qui gagne pour l'instant. Rappel des priorités du blot :
+ *   - un atout bat n'importe quelle carte non-atout ;
+ *   - entre deux atouts, le plus fort gagne ;
+ *   - sans atout, c'est la plus forte carte de la COULEUR D'ENTAME qui gagne ;
+ *   - une carte d'une autre couleur (ni atout, ni couleur d'entame) ne gagne pas. */
+function currentWinner(trick, trump){
+  if(!trick.length) return -1;
+  const led = trick[0].card.suit;            // "led" = couleur de la 1re carte (l'entame)
+  let best = trick[0];
+  for(let i=1;i<trick.length;i++){
+    const c = trick[i].card, b = best.card;
+    let wins;
+    if(c.suit===trump && b.suit!==trump) wins=true;                                   // atout > non-atout
+    else if(c.suit===trump && b.suit===trump) wins = rankStrength(c,trump) > rankStrength(b,trump); // atout vs atout
+    else if(c.suit!==trump && b.suit===trump) wins=false;                             // non-atout ne bat pas un atout
+    else wins = (c.suit===led && (b.suit!==led || rankStrength(c,trump) > rankStrength(b,trump)));   // couleur d'entame
+    if(wins) best = trick[i];
+  }
+  return best.player;
+}
+
+/* QUELS COUPS SONT PERMIS ? Renvoie la liste des cartes que `player` a le DROIT
+ * de jouer. C'est ici que vivent les obligations du blot, donc l'IA n'a même pas
+ * besoin de connaître les règles : elle choisit juste parmi cette liste.
+ * Les obligations :
+ *   1) Fournir la couleur demandée si on en a.
+ *   2) Si l'atout est demandé : monter au-dessus si on peut.
+ *   3) Si on n'a pas la couleur ET que le partenaire est maître : défausse libre.
+ *   4) Sinon on doit couper (jouer atout) et surcouper si possible. */
+function legalMoves(hand, trick, trump, player){
+  if(!trick.length) return hand.slice();      // on entame : tout est permis
+  const led = trick[0].card.suit;
+  const hasLed = hand.some(c=>c.suit===led);  // a-t-on la couleur demandée ?
+  const trumps = hand.filter(c=>c.suit===trump);
+  const winnerPlayer = currentWinner(trick, trump);
+  const partnerWinning = teamOf(winnerPlayer)===teamOf(player);
+  const trumpsInTrick = trick.filter(t=>t.card.suit===trump).map(t=>t.card);
+  // force du meilleur atout déjà posé (-1 s'il n'y en a pas encore)
+  const highestTrump = trumpsInTrick.length ? Math.max(...trumpsInTrick.map(c=>rankStrength(c,trump))) : -1;
+
+  if(led===trump){                            // (2) on demande de l'atout
+    if(trumps.length){
+      const higher = trumps.filter(c=>rankStrength(c,trump)>highestTrump);
+      return higher.length ? higher : trumps; // monter si possible, sinon n'importe quel atout
+    }
+    return hand.slice();                       // pas d'atout -> on joue ce qu'on veut
+  }
+  if(hasLed) return hand.filter(c=>c.suit===led);  // (1) fournir la couleur
+  if(partnerWinning) return hand.slice();          // (3) partenaire maître -> défausse libre
+  if(trumps.length){                               // (4) couper
+    if(highestTrump>=0){
+      const higher = trumps.filter(c=>rankStrength(c,trump)>highestTrump);
+      return higher.length ? higher : trumps;      // surcouper si possible
+    }
+    return trumps;
+  }
+  return hand.slice();                              // pas d'atout du tout -> défausse libre
+}
+
+
+/* ===================== 4. L'IA (les 3 robots) ===================== */
+
+/* Force d'une main dans une couleur donnée : sert à décider de l'atout.
+ * On valorise surtout le Valet (20) et le 9 (14) — les rois de l'atout —
+ * et on ajoute un bonus de longueur (+5 par carte de cette couleur). */
+function suitStrength(hand, s){
+  let v = hand.filter(c=>c.suit===s).reduce((a,c)=>a+PTS_TRUMP[c.rank],0);
+  v += hand.filter(c=>c.suit===s).length*5;
+  return v;
+}
+/* Décision d'enchère d'un robot : il prend la couleur où il est le plus fort,
+ * mais seulement si cette force dépasse un seuil (sinon il passe). */
+function botBid(hand){
+  let best=null, bestV=-1;
+  for(const s of SUITS){ const v=suitStrength(hand,s); if(v>bestV){bestV=v;best=s;} }
+  return bestV>=46 ? best : null;   // 46 = seuil "main assez bonne pour prendre"
+}
+/* Choix d'une carte par un robot. Il ne joue QUE des coups légaux (legalMoves),
+ * puis applique une stratégie simple mais correcte :
+ *   - en entame : sortir un As hors-atout, sinon une petite carte ;
+ *   - si le partenaire mène : lui donner des points (10, As) ;
+ *   - si l'adversaire mène : gagner au moindre coût si le pli en vaut la peine ;
+ *   - sinon : se défausser de la carte la moins chère. */
+function botPlay(player){
+  const hand = G.hands[player];
+  const moves = legalMoves(hand, G.trick, G.trump, player);
+  if(moves.length===1) return moves[0];                     // un seul coup légal : pas de choix
+  const trump = G.trump;
+  const sortLow = arr => arr.slice().sort((a,b)=>             // trie du moins cher au plus cher
+      cardPoints(a,trump)-cardPoints(b,trump) || rankStrength(a,trump)-rankStrength(b,trump));
+
+  if(!G.trick.length){                                       // -- ENTAME --
+    const aces = moves.filter(c=>c.rank==='A' && c.suit!==trump);
+    if(aces.length) return aces[0];                          // un As hors-atout gagne souvent
+    const plains = moves.filter(c=>c.suit!==trump);
+    if(plains.length) return sortLow(plains)[0];             // garder ses atouts : sortir petit
+    return sortLow(moves)[0];                                // il ne reste que des atouts
+  }
+
+  const winner = currentWinner(G.trick,trump);
+  const partnerWins = teamOf(winner)===teamOf(player);
+  const trickPts = G.trick.reduce((a,t)=>a+cardPoints(t.card,trump),0); // points en jeu dans ce pli
+  const isLast = G.trick.length===3;                         // on joue en dernier ?
+
+  // cartes parmi les coups légaux qui FERAIENT gagner le pli si on les jouait
+  const winningMoves = moves.filter(c=>{
+    const test=[...G.trick,{player,card:c}];
+    return currentWinner(test,trump)===player;
+  });
+
+  if(partnerWins){
+    if(isLast || winner===partnerOf(player)){               // le pli revient au partenaire : on charge en points
+      const fat = moves.filter(c=>c.suit!==trump).sort((a,b)=>cardPoints(b,trump)-cardPoints(a,trump))[0];
+      return fat || sortLow(moves)[0];
+    }
+    return sortLow(moves)[0];
+  }
+  // l'adversaire mène : tenter de gagner si ça vaut le coup
+  if(winningMoves.length && (trickPts>=7 || isLast)) return sortLow(winningMoves)[0];
+  if(winningMoves.length && trickPts>=4 && winningMoves.some(c=>cardPoints(c,trump)<=4)) return sortLow(winningMoves)[0];
+  return sortLow(moves)[0];                                  // sinon, défausse la moins chère
+}
+
+
+/* ===================== 5. AFFICHAGE ===================== */
+const $ = s=>document.querySelector(s);
+const sleep = ms=>new Promise(r=>setTimeout(r,ms));   // petite pause (pour animer les robots)
+
+// construit l'élément HTML d'une carte
+function cardEl(card){
+  const d=document.createElement('div');
+  d.className='card'+(SUIT_RED[card.suit]?' red':'');
+  d.innerHTML=`<span class="r tl">${RANK_LABEL[card.rank]}${SUIT_SYM[card.suit]}</span>`+
+              `<span class="pip">${SUIT_SYM[card.suit]}</span>`+
+              `<span class="r br">${RANK_LABEL[card.rank]}${SUIT_SYM[card.suit]}</span>`;
+  return d;
+}
+function toast(msg){   // petit bandeau temporaire ("Belote !", "Atout : ...")
+  const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
+  $('#view-play').appendChild(t); setTimeout(()=>t.remove(),1400);
+}
+
+/* trie la main pour un affichage agréable : atout d'abord, puis par couleur,
+ * et à l'intérieur d'une couleur du plus fort au plus faible. */
+function sortHand(hand){
+  const trump=G.trump;
+  return hand.slice().sort((a,b)=>{
+    const sa=(a.suit===trump?-1:SUITS.indexOf(a.suit)), sb=(b.suit===trump?-1:SUITS.indexOf(b.suit));
+    if(sa!==sb) return sa-sb;
+    return rankStrength(b,a.suit===trump?trump:'x') - rankStrength(a,a.suit===trump?trump:'x');
+  });
+}
+
+/* redessine TOUTE la table à partir de G */
+function render(){
+  $('#scoreN').textContent=G.cumul[0]; $('#scoreE').textContent=G.cumul[1];
+  $('#trickN').textContent=G.tricksWon[0]+' plis'; $('#trickE').textContent=G.tricksWon[1]+' plis';
+  // dos de cartes des adversaires (on ne voit pas leur jeu) + surbrillance "à qui de jouer"
+  for(const p of [1,2,3]){
+    const back=$('#back-'+p); back.innerHTML='';
+    for(let i=0;i<G.hands[p].length;i++){const b=document.createElement('div'); b.className='cardback'; back.appendChild(b);}
+    $('#name-'+p).classList.toggle('turn', G.phase==='playing' && G.current===p);
+  }
+  // pastille d'atout
+  const tb=$('#trumpBadge');
+  const sym = G.trump ? `<div class="sym" style="color:${SUIT_RED[G.trump]?'#ff8a8a':'#fff'}">${SUIT_SYM[G.trump]}</div>` : `<div class="sym">–</div>`;
+  tb.innerHTML = `<div>atout<br><b>kozir</b></div>${sym}`;
+  // cartes du pli en cours, posées autour du centre
+  $('#center').querySelectorAll('.slot').forEach(s=>s.remove());
+  const seatClass={0:'s-south',1:'s-west',2:'s-north',3:'s-east'};
+  for(const t of G.trick){
+    const slot=document.createElement('div'); slot.className='slot '+seatClass[t.player];
+    slot.appendChild(cardEl(t.card)); $('#center').appendChild(slot);
+  }
+  renderHand();
+}
+
+/* redessine la main du joueur ; les cartes jouables sont cliquables,
+ * les coups interdits sont grisés (pédagogique pour un débutant). */
+function renderHand(){
+  const h=$('#hand'); h.innerHTML='';
+  const hand=sortHand(G.hands[0]);
+  const myTurn = G.phase==='playing' && G.current===0;
+  const legal = myTurn ? legalMoves(G.hands[0],G.trick,G.trump,0) : [];
+  const legalSet = new Set(legal.map(c=>c.suit+c.rank));
+  for(const card of hand){
+    const el=cardEl(card);
+    const key=card.suit+card.rank;
+    if(myTurn){
+      if(legalSet.has(key)){ el.classList.add('playable'); el.onclick=()=>onHumanPlay(card); }
+      else el.classList.add('illegal');
+      if(G.hintCard && G.hintCard.suit===card.suit && G.hintCard.rank===card.rank) el.classList.add('hint');
+    }
+    h.appendChild(el);
+  }
+  $('#btnHint').disabled = !myTurn;
+}
+
+
+/* ===================== 6. DÉROULÉ DE LA PARTIE ===================== */
+
+/* Quand c'est à toi de jouer, le programme "attend" en mettant en pause une
+ * Promise ; ton clic sur une carte la débloque via humanResolver. */
+let humanResolver=null;
+function onHumanPlay(card){
+  if(!humanResolver) return;
+  const r=humanResolver; humanResolver=null; G.hintCard=null;
+  r(card);
+}
+function setStatus(t){ $('#status').textContent=t; }
+
+// démarrer une toute nouvelle partie (scores remis à zéro)
+function newGame(){ closeOverlay(); G=freshGame(); startRound(); }
+
+/* DÉMARRER UNE DONNE : on remet à zéro ce qui est propre à la donne,
+ * on distribue 8 cartes à chacun, puis on lance les enchères. */
+function startRound(){
+  G.trump=null; G.taker=null; G.trick=[]; G.tricksWon=[0,0]; G.pile=[[],[]];
+  G.lastTrickTeam=null; G.beloteShown={0:{K:false,Q:false},1:{K:false,Q:false}}; G.beloteTeam=null; G.hintCard=null;
+  const deck=shuffle(buildDeck());
+  G.hands=[[],[],[],[]];
+  for(let i=0;i<32;i++) G.hands[i%4].push(deck[i]);   // distribution simple : une carte chacun à tour de rôle
+  G.phase='bidding';
+  render();
+  startBidding();
+}
+
+/* --- LES ENCHÈRES (version simplifiée pour débutant) ---
+ * Chacun à son tour PREND une couleur d'atout ou PASSE, en commençant à
+ * gauche du donneur. Le premier qui prend fixe l'atout. Si tout le monde
+ * passe, on redistribue. (Le vrai "bazar" arménien est expliqué dans Règles.) */
+function startBidding(){ G.bidPasses=0; G.bidder=(G.dealer+1)%4; nextBid(); }
+function nextBid(){
+  if(G.bidPasses>=4){ setStatus('Tout le monde passe — nouvelle donne…'); setTimeout(startRound,900); return; }
+  const p=G.bidder;
+  if(p===0){ showHumanBid(); return; }                 // à toi : on affiche le choix
+  const choice=botBid(G.hands[p]);                     // un robot décide
+  if(choice){ setStatus(`${SEAT_NAME[p]} prend à ${SUIT_NAME[choice]} ${SUIT_SYM[choice]}`); setTimeout(()=>commitTrump(choice,p),800); }
+  else{ setStatus(`${SEAT_NAME[p]} passe.`); G.bidPasses++; G.bidder=(G.bidder+1)%4; setTimeout(nextBid,650); }
+}
+/* l'atout est choisi : on enregistre le preneur et on lance le 1er pli */
+function commitTrump(suit, taker){
+  G.trump=suit; G.taker=taker; G.phase='playing';
+  G.current=(G.dealer+1)%4;                            // le joueur à gauche du donneur entame
+  closeOverlay(); render();
+  toast(`Atout : ${SUIT_NAME[suit]} ${SUIT_SYM[suit]}`);
+  setStatus(`Atout ${SUIT_SYM[suit]} — preneur : ${teamOf(taker)===0?'NOUS':'EUX'}`);
+  setTimeout(playLoop,700);
+}
+
+/* --- LES 8 PLIS --- (fonction "async" : elle se met en pause pendant les
+ * animations des robots et pendant qu'elle attend ton clic) */
+async function playLoop(){
+  while(G.trick.length<4){                              // un pli = 4 cartes
+    const p=G.current;
+    let card;
+    if(p===0){                                          // à toi : on attend ton clic
+      setStatus('À toi de jouer.'); renderHand();
+      card=await new Promise(res=>{humanResolver=res;});
+    }else{                                              // un robot : petite pause puis il joue
+      setStatus(`${SEAT_NAME[p]} joue…`); await sleep(550); card=botPlay(p);
+    }
+    applyPlay(p,card); render(); await sleep(260);
+    G.current=(G.current+1)%4;
+  }
+  // le pli est complet : on désigne le gagnant et il ramasse
+  const winner=currentWinner(G.trick,G.trump);
+  const tm=teamOf(winner);
+  G.pile[tm].push(...G.trick.map(t=>t.card));
+  G.tricksWon[tm]++; G.lastTrickTeam=tm;                // mémorise le dernier pli (pour le +10)
+  setStatus(`${SEAT_NAME[winner]} remporte le pli.`);
+  render(); await sleep(700);
+  G.trick=[]; G.current=winner;                         // le gagnant entame le pli suivant
+  render();
+  if(G.tricksWon[0]+G.tricksWon[1]>=8){ endRound(); return; }  // 8 plis joués -> on compte
+  playLoop();
+}
+/* applique une carte : la retire de la main, l'ajoute au pli, et surveille la belote */
+function applyPlay(p,card){
+  const i=G.hands[p].findIndex(c=>c.suit===card.suit&&c.rank===card.rank);
+  G.hands[p].splice(i,1);
+  G.trick.push({player:p,card});
+  // belote-rebelote : si une équipe a montré le Roi ET la Dame d'atout -> +20
+  if(card.suit===G.trump && (card.rank==='K'||card.rank==='Q')){
+    const tm=teamOf(p); G.beloteShown[tm][card.rank]=true;
+    if(G.beloteShown[tm].K && G.beloteShown[tm].Q && G.beloteTeam===null){ G.beloteTeam=tm; toast('Belote-Rebelote ! +20'); }
+  }
+}
+
+/* --- LE DÉCOMPTE DE LA DONNE ---
+ * On additionne les points de chaque équipe, on ajoute le "dix de der" (10 pour
+ * le dernier pli) et la belote (20). Puis on applique le contrat :
+ *   - capot (les 8 plis) = 250 ;
+ *   - sinon, si le PRENEUR a plus de points que l'adversaire : chacun marque ses points ;
+ *   - sinon le preneur CHUTE : l'adversaire prend 162, le preneur 0 (la belote
+ *     reste toujours à qui la possède). */
+function endRound(){
+  G.phase='roundEnd';
+  const trump=G.trump;
+  let cp=[0,0];                                          // points "cartes" de chaque équipe
+  for(const tm of [0,1]) cp[tm]=G.pile[tm].reduce((a,c)=>a+cardPoints(c,trump),0);
+  const der=G.lastTrickTeam;                             // équipe du dernier pli
+  let raw=[cp[0],cp[1]]; raw[der]+=10;                   // + dix de der
+  const beloteTm=G.beloteTeam;
+  const capot=(G.tricksWon[0]===8)?0:(G.tricksWon[1]===8)?1:-1;
+  const taker=teamOf(G.taker);
+
+  let round=[0,0], outcome;
+  if(capot>=0){                                          // CAPOT
+    round[capot]=250 + (beloteTm===capot?20:0);
+    outcome=(capot===taker)?'capot':'capot-adverse';
+  }else{
+    let tot=[raw[0]+(beloteTm===0?20:0), raw[1]+(beloteTm===1?20:0)];
+    const def=1-taker;
+    if(tot[taker]>tot[def]){ round=[tot[0],tot[1]]; outcome='réussi'; }      // contrat tenu
+    else{                                                                    // chute du preneur
+      round[def]=162+(beloteTm===def?20:0); round[taker]=(beloteTm===taker?20:0); outcome='chute';
+    }
+  }
+  G.cumul[0]+=round[0]; G.cumul[1]+=round[1];            // on ajoute au score cumulé
+  showRoundEnd({cp,raw,round,beloteTm,capot,taker,outcome,der});
+}
+
+
+/* ===================== FENÊTRES MODALES ===================== */
+function closeOverlay(){ const o=$('#overlay'); if(o) o.remove(); }
+function overlayShell(inner){
+  closeOverlay();
+  const o=document.createElement('div'); o.id='overlay'; o.className='overlay';
+  o.innerHTML=`<div class="modal">${inner}</div>`;
+  $('#view-play').appendChild(o);
+  return o;
+}
+/* écran de BIENVENUE (montré au lancement) — guide le débutant total */
+function showWelcome(){
+  const o=overlayShell(`
+    <div class="welcome">
+      <h2>Բարև ! <span class="em">Bienvenue au blot</span></h2>
+      <p>Tu joues avec <strong>Nord</strong> (en face) contre Est &amp; Ouest. But : marquer des points en gagnant des plis.</p>
+      <ol>
+        <li><strong>Parle</strong> : choisis une couleur d'<em>atout</em> (la plus forte) ou passe.</li>
+        <li><strong>Joue</strong> : touche une carte. Les cartes grisées sont interdites — pas besoin de connaître les règles, l'appli t'empêche de te tromper.</li>
+        <li>Coincé ? Le bouton <strong>💡 Indice</strong> te montre un bon coup.</li>
+      </ol>
+      <p style="color:var(--muted)">Onglet <strong>Règles</strong> pour tout comprendre · <strong>Antisèche</strong> pour la triche rapide.</p>
+      <div class="rowbtns">
+        <button class="btn ghost" id="wRules">Lire les règles</button>
+        <button class="btn primary" id="wStart">Jouer maintenant</button>
+      </div>
+    </div>`);
+  $('#wStart').onclick=newGame;
+  $('#wRules').onclick=()=>{ closeOverlay(); switchTab('rules'); };
+}
+/* écran d'ENCHÈRE du joueur : on lui montre sa main + la force de chaque couleur */
+function showHumanBid(){
+  const hand=sortHand(G.hands[0]);
+  const cards=hand.map(c=>`<div class="card ${SUIT_RED[c.suit]?'red':''}">
+     <span class="r tl">${RANK_LABEL[c.rank]}${SUIT_SYM[c.suit]}</span>
+     <span class="pip">${SUIT_SYM[c.suit]}</span></div>`).join('');
+  const best=botBid(G.hands[0]);
+  const suits=SUITS.map(s=>`<button class="suit-btn ${SUIT_RED[s]?'red':''} ${s===best?'best':''}" data-suit="${s}">
+     ${SUIT_SYM[s]} <small>${SUIT_NAME[s]}<br>${suitStrength(G.hands[0],s)} pts</small></button>`).join('');
+  const o=overlayShell(`
+    <h2>À toi de <span class="em">parler</span> <small style="font-size:12px;color:var(--muted)">(bazar)</small></h2>
+    <p style="color:var(--muted)">Choisis une couleur d'atout (ton équipe s'engage alors à faire la majorité des points) ou passe.</p>
+    <div class="bid-cards">${cards}</div>
+    <div style="font-size:12px;color:var(--muted)">Force de ta main par couleur — la mieux notée est entourée :</div>
+    <div class="suit-grid">${suits}</div>
+    <div class="rowbtns"><button class="btn ghost" id="bidPass">Passer (pas)</button></div>`);
+  o.querySelectorAll('.suit-btn').forEach(b=>b.onclick=()=>commitTrump(b.dataset.suit,0));
+  $('#bidPass').onclick=()=>{ closeOverlay(); setStatus('Tu passes.'); G.bidPasses++; G.bidder=(G.bidder+1)%4; setTimeout(nextBid,400); };
+}
+/* écran de FIN DE DONNE : détail du décompte, ligne par ligne */
+function showRoundEnd(d){
+  const nm=['NOUS','EUX'];
+  const won = G.cumul[0]>=G.target || G.cumul[1]>=G.target;   // partie terminée ?
+  let head;
+  if(d.outcome==='capot') head=`<span class="pill good">CAPOT !</span> Tu as réussi tous les plis.`;
+  else if(d.outcome==='capot-adverse') head=`<span class="pill bad">CAPOT adverse</span> Ils ont fait tous les plis.`;
+  else if(d.outcome==='réussi') head=`<span class="pill good">Contrat réussi</span> par ${nm[d.taker]}.`;
+  else head=`<span class="pill bad">Chute</span> ${nm[d.taker]} n'a pas fait la moitié.`;
+  const inner=`
+    <h2>Fin de la <span class="em">donne</span></h2>
+    <p>${head}</p>
+    <table class="scoretable">
+      <tr><th></th><th>NOUS</th><th>EUX</th></tr>
+      <tr><td>Points cartes</td><td>${d.cp[0]}</td><td>${d.cp[1]}</td></tr>
+      <tr><td>+ Dix de der</td><td>${d.der===0?'+10':'–'}</td><td>${d.der===1?'+10':'–'}</td></tr>
+      <tr><td>Belote-rebelote</td><td>${d.beloteTm===0?'+20':'–'}</td><td>${d.beloteTm===1?'+20':'–'}</td></tr>
+      <tr class="tot"><td>Donne</td><td>${d.round[0]}</td><td>${d.round[1]}</td></tr>
+      <tr class="tot"><td>Total (/${G.target})</td><td>${G.cumul[0]}</td><td>${G.cumul[1]}</td></tr>
+    </table>
+    <div class="rowbtns">${
+      won ? `<button class="btn primary" id="reMatch">${(G.cumul[0]>=G.cumul[1]?'NOUS':'EUX')} gagne 🎉 — Rejouer</button>`
+          : `<button class="btn primary" id="nextDeal">Donne suivante</button>`}</div>`;
+  overlayShell(inner);
+  if(won) $('#reMatch').onclick=()=>{ G.cumul=[0,0]; G.dealer=(G.dealer+1)%4; closeOverlay(); startRound(); };
+  else    $('#nextDeal').onclick=()=>{ G.dealer=(G.dealer+1)%4; closeOverlay(); startRound(); };   // le donneur tourne
+}
+
+/* bouton INDICE : surligne le coup que jouerait l'IA à ta place */
+$('#btnHint').onclick=()=>{
+  if(G.phase!=='playing'||G.current!==0) return;
+  G.hintCard=botPlay(0); renderHand();
+  setStatus('Indice : la carte surlignée est un bon choix.');
+};
+$('#btnNew').onclick=newGame;
+
+/* navigation entre les 3 onglets */
+function switchTab(tab){
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x.dataset.tab===tab));
+  for(const v of ['play','rules','cheat']) $('#view-'+v).classList.toggle('hidden', v!==tab);
+}
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>switchTab(t.dataset.tab));
+
+
+/* ===================== 7. CONTENU RÈGLES & ANTISÈCHE ===================== */
+$('#rulesDoc').innerHTML = `
+<h1>📖 Apprendre le blot</h1>
+<p>Le <strong>blot</strong> (arménien <b style="color:#cdddff">բլոտ</b>, prononcé « <i>blott</i> ») est la <strong>belote arménienne</strong> : un jeu de plis à <strong>4 joueurs en 2 équipes</strong>. Tu joues avec <strong>Nord</strong> (en face de toi) contre <strong>Est</strong> et <strong>Ouest</strong>. On utilise <strong>32 cartes</strong> (du 7 à l'As).</p>
+
+<div class="tip"><strong>Tu débutes complètement ?</strong> Tu n'as rien à mémoriser pour commencer : lance une partie, touche une carte (les cartes grisées sont les coups interdits), et appuie sur <strong>💡 Indice</strong> quand tu hésites. Reviens lire ceci quand tu veux comprendre le pourquoi.</div>
+
+<h2>1. Le but</h2>
+<p>Gagner des <strong>plis</strong> (= des tours) qui contiennent des <strong>points</strong>. La première équipe à atteindre <strong>1001 points</strong>, cumulés sur plusieurs donnes, gagne la partie.</p>
+
+<h2>2. La valeur des cartes <span style="font-size:12px;color:var(--muted)">(le point clé !)</span></h2>
+<p>Une carte ne vaut <strong>pas le même nombre de points</strong> selon qu'elle est de la couleur d'<strong>atout</strong> ou non. À l'atout, le <strong>Valet</strong> et le <strong>9</strong> deviennent les plus fortes cartes du jeu.</p>
+<table class="tbl">
+  <tr><th>Carte</th><th>À l'ATOUT — rang</th><th>pts</th><th>HORS atout — rang</th><th>pts</th></tr>
+  <tr><td>Valet (V)</td><td>1ᵉʳ · la + forte</td><td>20</td><td>7ᵉ</td><td>2</td></tr>
+  <tr><td>9</td><td>2ᵉ</td><td>14</td><td>6ᵉ</td><td>0</td></tr>
+  <tr><td>As (A)</td><td>3ᵉ</td><td>11</td><td>1ᵉʳ · la + forte</td><td>11</td></tr>
+  <tr><td>10</td><td>4ᵉ</td><td>10</td><td>2ᵉ</td><td>10</td></tr>
+  <tr><td>Roi (R)</td><td>5ᵉ</td><td>4</td><td>3ᵉ</td><td>4</td></tr>
+  <tr><td>Dame (D)</td><td>6ᵉ</td><td>3</td><td>4ᵉ</td><td>3</td></tr>
+  <tr><td>8</td><td>7ᵉ</td><td>0</td><td>5ᵉ</td><td>0</td></tr>
+  <tr><td>7</td><td>8ᵉ</td><td>0</td><td>8ᵉ</td><td>0</td></tr>
+</table>
+<p>Total caché dans les cartes : <strong>152 points</strong>. On ajoute <strong>10 points</strong> pour qui remporte le <strong>dernier pli</strong> (le « dix de der ») = <strong>162 points</strong> à se partager à chaque donne.</p>
+
+<h2>3. Choisir l'atout — le « bazar »</h2>
+<p>Avant de jouer, on choisit la couleur d'atout pendant une phase d'enchères appelée <strong>bazar</strong> (բազար, « le marché »). L'équipe qui prend devient le <strong>preneur</strong> et s'engage à marquer <strong>plus de la moitié</strong> des points (au moins 82 sur 162). Si elle échoue, elle « chute ».</p>
+<div class="tip">Dans cette appli (version débutant), c'est simple : chacun à son tour <strong>prend une couleur</strong> ou <strong>passe</strong>. Quand c'est à toi, l'appli affiche la <strong>force de ta main</strong> dans chaque couleur. Bonne main d'atout = beaucoup de Valets / 9 / As dans la couleur, et plusieurs cartes de cette couleur.</div>
+<div class="note"><strong>Le vrai bazar arménien (plus tard).</strong> À la table, on n'annonce pas qu'une couleur : on enchérit un <strong>nombre</strong> de points. On dit par exemple « Cœur 15 » = je m'engage à faire <strong>150</strong>. Chaque enchère doit dépasser la précédente. On peut <strong>contrer</strong> (kontra, ×2) et <strong>surcontrer</strong> (rekontra, ×4) le contrat adverse. Il existe aussi les contrats <strong>sans atout</strong> et <strong>tout atout</strong> (valeurs des cartes différentes).</div>
+
+<h2>4. Jouer un pli</h2>
+<p>Le joueur d'entame pose une carte ; chacun en pose une à son tour. Les règles <strong>obligatoires</strong> (l'appli les applique pour toi) :</p>
+<ul>
+  <li><strong>Fournir</strong> : tu dois jouer la couleur demandée si tu en as.</li>
+  <li>Si tu n'as <strong>pas</strong> la couleur demandée :
+    <ul>
+      <li>si ton <strong>partenaire est maître</strong> (gagne le pli pour l'instant), tu peux te <strong>défausser</strong> de n'importe quelle carte ;</li>
+      <li>sinon tu dois <strong>couper</strong> (jouer un atout), et <strong>monter</strong> au-dessus de l'atout déjà posé si tu le peux.</li>
+    </ul>
+  </li>
+  <li>Si c'est l'<strong>atout</strong> qui est demandé, tu dois jouer un atout <strong>plus fort</strong> si tu en as un.</li>
+</ul>
+<p>Le pli est gagné par le <strong>plus fort atout</strong> joué ; s'il n'y a pas d'atout, par la <strong>plus forte carte de la couleur d'entame</strong>. Une carte d'une autre couleur ne peut pas gagner.</p>
+
+<h2>5. Belote-Rebelote</h2>
+<p>Si tu as le <strong>Roi ET la Dame d'atout</strong> dans ta main, tu marques <strong>+20</strong>. On dit « belote » en posant la première des deux, « rebelote » sur la seconde. (L'appli le détecte tout seul.)</p>
+
+<h2>6. Le décompte de la donne</h2>
+<ul>
+  <li>Chaque équipe additionne les points des cartes de ses plis (+10 pour le dernier pli, +20 si belote).</li>
+  <li><strong>Si le preneur réussit</strong> (plus de points que l'adversaire) : chaque équipe marque ses points.</li>
+  <li><strong>S'il chute</strong> : l'adversaire marque <strong>162</strong>, le preneur <strong>0</strong> (la belote reste à qui la possède).</li>
+  <li><strong>Capot</strong> (kapot — les 8 plis pour une équipe) : <strong>250 points</strong>.</li>
+</ul>
+
+<h2>7. Les mots arméniens à la table</h2>
+<div class="arm">Le vocabulaire du blot arménien emprunte beaucoup au <strong>russe</strong> et au <strong>français</strong> — normal, c'est une belote ! Voici les mots qu'on entend le plus (prononciation francisée) :</div>
+<table class="lex">
+  <tr><td class="arm-w">բլոտ</td><td class="pron">blott</td><td>le jeu lui-même (le « blot »)</td></tr>
+  <tr><td class="arm-w">բազար</td><td class="pron">ba-zar</td><td>les enchères, « le marché »</td></tr>
+  <tr><td class="arm-w">կոզիր</td><td class="pron">ko-zir</td><td>l'<strong>atout</strong> (la couleur maîtresse) — du russe <i>козырь</i></td></tr>
+  <tr><td class="arm-w">բել / բելոտ</td><td class="pron">bel / be-lott</td><td>belote : Roi + Dame d'atout (+20)</td></tr>
+  <tr><td class="arm-w">կապոտ</td><td class="pron">ka-pott</td><td>capot : remporter les 8 plis</td></tr>
+  <tr><td class="arm-w">կոնտրա</td><td class="pron">kon-tra</td><td>contrer (doubler la mise)</td></tr>
+  <tr><td class="arm-w">ռեկոնտրա</td><td class="pron">re-kon-tra</td><td>surcontrer (quadrupler)</td></tr>
+  <tr><td class="arm-w">պաս</td><td class="pron">pass</td><td>passer (ne pas prendre)</td></tr>
+  <tr><td class="arm-w">ձեռք</td><td class="pron">dzerk</td><td>la « main » (tes cartes) / une donne</td></tr>
+  <tr><td class="arm-w">խաղ</td><td class="pron">khagh</td><td>la partie, le jeu</td></tr>
+</table>
+<h3>Les cartes</h3>
+<table class="lex">
+  <tr><td class="arm-w">Աս</td><td class="pron">as</td><td>As</td></tr>
+  <tr><td class="arm-w">Թագավոր</td><td class="pron">ta-ga-vor</td><td>Roi (littéralement « roi »)</td></tr>
+  <tr><td class="arm-w">Տիկին / Թագուհի</td><td class="pron">ti-kine / ta-gou-hi</td><td>Dame / Reine</td></tr>
+  <tr><td class="arm-w">Վալետ</td><td class="pron">va-lett</td><td>Valet</td></tr>
+</table>
+<div class="note">À la table, les <strong>figures</strong> et les <strong>couleurs</strong> sont souvent dites en russe ou en français — ne sois pas surpris d'entendre « valet », « dama » ou « pik ».</div>
+
+<h2>8. Pour aller plus loin</h2>
+<p>Une fois les bases en main, découvre ce que cette version laisse de côté : les contrats <strong>sans atout</strong> / <strong>tout atout</strong>, les <strong>annonces</strong> de combinaisons (séquences de 3/4/5 cartes = 20/50/100 ; carré de Valets = 200, de 9 = 150, autres carrés = 100) et le <strong>contre / surcontre</strong>. Les valeurs et le comptage changent alors, et les règles varient selon les familles et les régions.</p>
+
+<div class="tip"><strong>5 conseils de débutant</strong>
+<ul style="margin:.3em 0">
+<li>Avant de parler, compte tes atouts : 4 cartes ou plus dont Valet/9 → prends.</li>
+<li>Garde tes maîtres (As hors atout, Valet d'atout) pour les bons moments.</li>
+<li>Quand ton partenaire est maître, donne-lui des points (10, As).</li>
+<li>« Couper » avec un petit atout suffit souvent — garde les gros.</li>
+<li>En cas de doute, appuie sur 💡 <strong>Indice</strong> : tu apprends en regardant.</li>
+</ul></div>
+`;
+
+$('#cheatDoc').innerHTML = `
+<h1>⚡ Antisèche</h1>
+
+<h2>Ordre &amp; points</h2>
+<table class="tbl">
+  <tr><th>Atout (fort→faible)</th><th>pts</th></tr>
+  <tr><td><span class="kbd">V</span> Valet</td><td>20</td></tr>
+  <tr><td><span class="kbd">9</span></td><td>14</td></tr>
+  <tr><td><span class="kbd red">A</span> As</td><td>11</td></tr>
+  <tr><td><span class="kbd">10</span></td><td>10</td></tr>
+  <tr><td><span class="kbd">R</span> Roi</td><td>4</td></tr>
+  <tr><td><span class="kbd red">D</span> Dame</td><td>3</td></tr>
+  <tr><td><span class="kbd">8</span> · <span class="kbd">7</span></td><td>0</td></tr>
+</table>
+<table class="tbl">
+  <tr><th>Hors atout (fort→faible)</th><th>pts</th></tr>
+  <tr><td><span class="kbd red">A</span> As</td><td>11</td></tr>
+  <tr><td><span class="kbd">10</span></td><td>10</td></tr>
+  <tr><td><span class="kbd">R</span> Roi</td><td>4</td></tr>
+  <tr><td><span class="kbd red">D</span> Dame</td><td>3</td></tr>
+  <tr><td><span class="kbd">V</span> Valet</td><td>2</td></tr>
+  <tr><td><span class="kbd">9</span> · <span class="kbd">8</span> · <span class="kbd">7</span></td><td>0</td></tr>
+</table>
+
+<h2>Obligations</h2>
+<ul>
+<li>Fournir la couleur demandée.</li>
+<li>Pas la couleur + <strong>partenaire maître</strong> → défausse libre.</li>
+<li>Pas la couleur + adversaire mène → <strong>couper</strong> et <strong>monter</strong> si possible.</li>
+<li>Atout demandé → <strong>monter</strong> si possible.</li>
+</ul>
+
+<h2>Comptage</h2>
+<ul>
+<li>152 (cartes) + 10 (dernier pli) = <strong>162</strong>.</li>
+<li>Belote-rebelote (R+D d'atout) = <strong>+20</strong>.</li>
+<li>Preneur doit faire <strong>≥ 82</strong>. Chute → adversaire 162.</li>
+<li>Capot (8 plis) = <strong>250</strong>.</li>
+</ul>
+
+<h2>Mots arméniens</h2>
+<table class="lex">
+  <tr><td class="arm-w">բլոտ</td><td class="pron">blott</td><td>le jeu</td></tr>
+  <tr><td class="arm-w">կոզիր</td><td class="pron">ko-zir</td><td>atout</td></tr>
+  <tr><td class="arm-w">բազار</td><td class="pron">ba-zar</td><td>les enchères</td></tr>
+  <tr><td class="arm-w">բել</td><td class="pron">bel</td><td>belote (R+D d'atout)</td></tr>
+  <tr><td class="arm-w">կապոտ</td><td class="pron">ka-pott</td><td>capot (8 plis)</td></tr>
+  <tr><td class="arm-w">կոնտրա</td><td class="pron">kon-tra</td><td>contre (×2)</td></tr>
+  <tr><td class="arm-w">պաս</td><td class="pron">pass</td><td>passer</td></tr>
+</table>
+
+<h2>Glossaire français</h2>
+<dl class="glos">
+<dt>Atout (kozir)</dt><dd>Couleur maîtresse de la donne ; bat les autres couleurs.</dd>
+<dt>Preneur</dt><dd>L'équipe qui a pris l'atout ; doit faire la majorité des points.</dd>
+<dt>Entamer</dt><dd>Poser la première carte d'un pli.</dd>
+<dt>Fournir</dt><dd>Jouer la couleur demandée.</dd>
+<dt>Couper</dt><dd>Jouer un atout quand on n'a pas la couleur demandée.</dd>
+<dt>Monter / surcouper</dt><dd>Jouer un atout plus fort que celui déjà posé.</dd>
+<dt>Défausse</dt><dd>Se débarrasser d'une carte quand on ne peut pas (ou pas besoin de) couper.</dd>
+<dt>Maître</dt><dd>La carte (ou le joueur) qui gagne le pli pour l'instant.</dd>
+<dt>Dix de der</dt><dd>10 points bonus pour le dernier pli.</dd>
+<dt>Capot</dt><dd>Remporter les 8 plis (250 points).</dd>
+<dt>Chute</dt><dd>Le preneur rate son contrat.</dd>
+</dl>
+`;
+
+/* ===================== DÉMARRAGE ===================== */
+showWelcome();   // au lancement, on accueille le débutant
+
+/* service worker : met toute l'app en cache pour qu'elle marche SANS réseau
+ * (avion). Sans effet si la page est ouverte en file:// — mais le jeu, lui,
+ * fonctionne déjà 100 % hors-ligne car tout est dans ce fichier. */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
