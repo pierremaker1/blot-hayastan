@@ -1,7 +1,13 @@
 # Բlot Hayastan — apprendre le blot (belote arménienne)
 
+**▶ Jouer en ligne : https://pierremaker1.github.io/blot-hayastan/**
+
 Webapp **100 % hors-ligne** pour apprendre les règles du blot et **jouer contre 3 IA**.
 Optimisée téléphone. Aucune connexion requise une fois chargée → parfaite pour l'avion ✈️
+
+> **Installer pour le vol** : ouvre le lien sur ton téléphone (avec du réseau),
+> puis *Partager → Sur l'écran d'accueil* (iPhone) ou *menu ⋮ → Installer l'application*
+> (Android). Lance-la une fois : tout est mis en cache et l'app marche en mode avion.
 
 ## Contenu
 
